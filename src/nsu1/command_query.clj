@@ -19,7 +19,6 @@
           ::init nil
         }))))
 
-
 (defn init [field value & map]
   "The function allows a user to fill in the init section of a class when defining it with def-class."
   {:init (apply hash-map field value map)}

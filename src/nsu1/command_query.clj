@@ -12,8 +12,7 @@
     (fn [h]
       (assoc h
         :Document {
-          ::type :Document                                  ; ToDo Так ли он нам нужен?
-                                                            ; Можно же условится, что ключ сам по себе будет являться типом
+          ::type :Document
           ::super nil
           ::fields {}
           ::init nil

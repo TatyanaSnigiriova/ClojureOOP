@@ -1,5 +1,5 @@
 (ns nsu1.core
-  (:require [nsu1.command-query :refer :all])
+  (:require [nsu1.def-create-doc :refer :all])
   (:require [clojure.pprint :refer :all])
 )
 ; Задача - ввести собственное определение ключевого слова класс, определение методов

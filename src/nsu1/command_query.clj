@@ -165,9 +165,37 @@
     ; Сам объект
     ;;все состояние хранится под одним ref
     ;;можем использовать стандартный механизм валидации
+    (println (str @state))
     {::type type,
      ::state state                                          ; ::fields будем использовать для списка всех полей
      ; Список полей для всех экземпляров одного класса будет одинаковым, поэтому его можно получить в doc-hierarchy
     }
   ))
 
+(defn get-value
+  "This is the getter for all class types"
+  [obj field]
+  (let [state @(obj ::state)]                               ; Мы храним все изменяемое состояние под одним ref
+    (assert (contains? state field)
+      (format "for an instance of an object of type %s
+      - the object does not contain field '%s'." (str (obj ::type)) field
+      )
+    )
+    @(state field)
+  )
+)
+
+(defn set-value
+  "This is the setter for all class types"
+  [obj field new_value]
+  (let [state @(obj ::state)]
+    (assert (contains? state field)
+      (format "for an instance of an object of type %s
+              - the object does not contain field '%s'." (str (obj ::type)) field
+      )
+    )
+    (dosync
+      (ref-set (state field) new_value)
+    )
+  )
+)

@@ -52,7 +52,8 @@ doc-hierarchy
 
 ;Инстанцирование документов, вызов «методов»                ; new
 (let [doc (create-doc :DerivedDoc :cnt1 1 :cnt2 2 :cnt3 3)]
-  ;(println (getf doc :cnt1) (getf doc :cnt2))
+  (println (get-value doc :cnt1) (get-value doc :cnt2))
   ;(inc-counters doc 2)
-  ;(println (getf doc :cnt1) (getf doc :cnt2))
+  (set-value doc :cnt1 55)
+  (println  (get-value doc :cnt1) (get-value doc :cnt2))
 )

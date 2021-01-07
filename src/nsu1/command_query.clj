@@ -21,8 +21,9 @@
 
 
 
-(defn init [& fields-values-array]
+(defn init
   "The function allows a user to fill in the init section of a class when defining it with def-doc-type."
+  [& fields-values-array]
   {
     :inits (
       apply hash-map fields-values-array
@@ -49,7 +50,6 @@
   (get (get @doc-hierarchy type) ::fields)
 )
 
-
 (defn get-class-inits [type]
   (get (get @doc-hierarchy type) ::inits)
 )
@@ -60,8 +60,9 @@
 )
 
 
-(defn get-all-fields [type]
+(defn get-all-fields
   "Retrieves lazy-seq of all fields of the current class and its ancestor classes (Even if they are repeated)."
+  [type]
   (let [
       class-fields (get-class-fields type)
       supers (get-super-class-type type)
@@ -79,9 +80,10 @@
     )))
 
 
-(defn get-all-inits [type]
+(defn get-all-inits
   "Retrieves all default values of the current class and its ancestor classes.
   The successor overrides values set in predecessor."
+  [type]
   (let [
       class-init (get-class-inits type)
       supers (get-super-class-type type)
@@ -100,9 +102,10 @@
     )))
 
 
-(defmacro def-doc-type [name supers fields & sections]
+(defmacro def-doc-type
   "Adding information about the new class to the hierarchy if its ancestor exists
   (otherwise, the base class must be specified)"
+  [name supers fields & sections]
   `(let [
     sections# (apply merge (map eval '~sections))
     inits# (get sections# :inits)
@@ -150,44 +153,46 @@
               }
             ))))))
 
-(defn create-doc [type & fields_values]
+
+(defn create-doc
   "Creates an instance of the class."
+  [type & constructor_fields_values]
   {:pre [(contains? @doc-hierarchy type)]}
   (let [
-      fields_values (if (nil? fields_values) '() fields_values)
+      constructor_fields_values (if (nil? constructor_fields_values) '() constructor_fields_values)
       all_fields (set (get-all-fields type))
       all_inits (get-all-inits type)
-      fields_values_map (merge all_inits (apply hash-map fields_values))
+      constructor_fields_values_map (apply hash-map constructor_fields_values)
+      fields_values_map (merge all_inits constructor_fields_values_map)
       state (ref {})
     ]
-    ; Нужна проверка на пересечение типов
-    (dosync
-      (doseq [kv fields_values_map]
-        (if (contains? all_fields (first kv))
-          (alter state
-            #(assoc % (first kv) (ref (second kv)))         ;Используя ref - есть возможность упаковать validator вместе со значением
-          )
-          (assert false
-            (format
-              "Constructor error for an instance of an object of type %s
-              - the object does not contain field '%s'." (str type) (first kv)
-            )
-          )
+    (doseq [init-field (keys constructor_fields_values_map)]
+      (assert (contains? all_fields init-field)
+        (format "ERROR IN create-doc METHOD: Constructor error for an instance of an object of type %s\n
+                  - the object does not contain field '%s'." type init-field
         )
       )
     )
-    ; Таким образом, и сам объект является именяемым, и его поля
+    (dosync
+      (doseq [key-value-pair fields_values_map]
+        (alter state
+          #(assoc % (first key-value-pair) (ref (second key-value-pair)))         ;Используя ref - есть возможность упаковать validator вместе со значением
+        )
+      )
+    )
+    ; Таким образом, и сам объект является изменяемым, и его поля
     ; Что позволяет исполнять, например, механизм агрегирования
 
     ; Сам объект
-    ;;все состояние хранится под одним ref
-    ;;можем использовать стандартный механизм валидации
-    (println (str @state))
+    ; все состояние хранится под одним ref - state
+    ;(println (str @state))
     {::type type,
      ::state state                                          ; ::fields будем использовать для списка всех полей
      ; Список полей для всех экземпляров одного класса будет одинаковым, поэтому его можно получить в doc-hierarchy
     }
-  ))
+  )
+)
+
 
 (defn get-value
   "This is the getter for all class types"
@@ -195,12 +200,13 @@
   (let [state @(obj ::state)]                               ; Мы храним все изменяемое состояние под одним ref
     (assert (contains? state field)
       (format "for an instance of an object of type %s
-      - the object does not contain field '%s'." (str (obj ::type)) field
+                - the object does not contain field '%s'." (obj ::type) field
       )
     )
     @(state field)
   )
 )
+
 
 (defn set-value
   "This is the setter for all class types"
@@ -208,11 +214,9 @@
   (let [state @(obj ::state)]
     (assert (contains? state field)
       (format "for an instance of an object of type %s
-              - the object does not contain field '%s'." (str (obj ::type)) field
+                - the object does not contain field '%s'." (obj ::type) field
       )
     )
     (dosync
       (ref-set (state field) new_value)
-    )
-  )
-)
+    )))

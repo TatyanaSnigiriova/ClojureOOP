@@ -9,3 +9,7 @@
 (println (cons z x))
 (println (union z x))
 
+(def h-map (apply hash-map [:a 1 :b 2 :c 3 :d 4]))
+(doseq [pair h-map]
+  (println pair)
+)

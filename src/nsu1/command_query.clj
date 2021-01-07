@@ -15,58 +15,75 @@
           ::type :Document
           ::super nil
           ::fields {}
-          ::init nil
+          ::inits nil
          ; ToDo :: validators nil
         }))))
+
+
 
 (defn init [& fields-values-array]
   "The function allows a user to fill in the init section of a class when defining it with def-doc-type."
   {
-    :init (
+    :inits (
       apply hash-map fields-values-array
     )
   }
 )
+
 
 ; Метод init просто упаковывает инициируемые поля в структуру нужного вида и действует довольно слепо -
 ; Все основные проверки, связанные с соответствием полей в :init и атрибутами :fields
 ; (как наследуемыми текущим классом, так и определёнными непосредственно в этом классе),
 ; а также валидация указанных начальных значений должна осуществляется в методе def-doc-type.
 
-; ToDo Сейчас наследование как таковое не реализовано, т.к. требуется считывать дерево иерархии от родителя к наследникам,
-; чтобы получить весь набор полей и их начальных значений, которые, опять же, могут быть переопределены в наследниках.
+; Наследование реализовано через дерево-иерархии:
+; Для текущего класса, наследующего атрибуты родительского класса, не требуется переопределять поля родительского класса:
+; Они будут определены путем считывания по дереву-иерхии от родителя к наследникам. При этом наследник может
+; инициализировать поля родительского класса, заменяя инициализацию в родительском классе.
+
+(defn get-class-type [type]
+  (get (get @doc-hierarchy type) ::type)
+)
+
+(defn get-class-fields [type]
+  (get (get @doc-hierarchy type) ::fields)
+)
+
+
+(defn get-class-inits [type]
+  (get (get @doc-hierarchy type) ::inits)
+)
 
 ; Return only TypeName, not structure for superClass
 (defn get-super-class-type [type]
   (get (get @doc-hierarchy type) ::super)
 )
 
+
 (defn get-all-fields [type]
-  "Retrieves all fields of the current class and its ancestor classes."
+  "Retrieves lazy-seq of all fields of the current class and its ancestor classes (Even if they are repeated)."
   (let [
-      class-def (get @doc-hierarchy type)
-      class-fields (get class-def ::fields)
+      class-fields (get-class-fields type)
       supers (get-super-class-type type)
     ]
     (if
       (not (nil? supers))                                   ; Только базовый класс :Document может не иметь родителей
       (concat
-        class-fields
         (apply concat
           (map
-            (fn [super] (get-all-fields super))
+            #(get-all-fields %)
             supers
           )
-        )
+        ) class-fields
       ) class-fields
     )))
+
 
 (defn get-all-inits [type]
   "Retrieves all default values of the current class and its ancestor classes.
   The successor overrides values set in predecessor."
   (let [
-      class-def (get @doc-hierarchy type)
-      class-init (get class-def ::init)
+      class-init (get-class-inits type)
       supers (get-super-class-type type)
     ]
     (if
@@ -78,64 +95,60 @@
             supers
           )
         ) class-init
-      )                                                     ;(merge {:a 1 :b 2 :c 3} {:b 9 :d 4})
+      ) class-init                                          ;(merge {:a 1 :b 2 :c 3} {:b 9 :d 4})
                                                             ;;=> {:d 4, :a 1, :b 9, :c 3}
-      class-init
     )))
 
 
 (defmacro def-doc-type [name supers fields & sections]
   "Adding information about the new class to the hierarchy if its ancestor exists
   (otherwise, the base class must be specified)"
-  (let [
-      sections (apply merge (map eval sections))
-      inits (get sections :init)
-    ]
-    `(let [
-      supers# (if (empty? '~supers) (list :Document) '~supers)
-      fields# (set '~fields)                              ; Это странно, но без ' в отладчике поля всегда пусты
-      ; Так как текущего класса еще нет в иерархии, то конретно для него нельзя получить список всех полей,
-      ; но их можно получить для его потомков, которые уже есть в иерархии
-
-      all-fields# (seq
+  `(let [
+    sections# (apply merge (map eval '~sections))
+    inits# (get sections# :inits)
+    supers# (if (empty? '~supers) (list :Document) '~supers)
+    fields# (set '~fields)
+    ; Так как текущего класса еще нет в иерархии, то конретно для него нельзя получить список всех полей,
+    ; но их можно получить для его потомков, которые уже есть в иерархии
+    all-fields# (seq
                     (if (not (nil? supers#))
                         (concat fields#
-                            (apply concat
+                          (apply concat
                             (map
-                              (fn [super#] (get-all-fields super#))
+                              #(get-all-fields %)
                               supers#
                             )
                           )
                         ) fields#
                     )
                   )
-      unique-fields# (seq (set all-fields#))
+      unique-fields# (set all-fields#)
     ]
-       (dosync
-         (assert (not (contains? @doc-hierarchy ~name))
-            (format "Forbidden new class name %s." ~name)
-         )                                          ; Имя класса ещё не должно быть в иерархии
-         (assert (= (count unique-fields#) (count all-fields#))
-            (format "The field name for class %s is already defined in one of its parent classes %s %s" ~name unique-fields#  all-fields#)
-         )
-         ; ToDo - нужна проверка для init - могут быть перечислены поля, которых нет в all-fields#
-         (alter
-           doc-hierarchy
-           (fn [h#]
-             (assoc
-               ;; private
-               h# ~name {
-                         ::type   '~name
-                         ::super  supers#
-                         ::fields fields#
-                         ::init   '~inits
-                         }
-                  ; По сути, возможость отладки появляется только после успешного добавления в иерархию или при помощи macroexpand
-                  ; Не совсем ясно, почему '~ без ' вызывает ошибку - значения вычисляются?
-                  ; Разобраться - ToDo
-                  )))))))
-
-; ToDo Создание экземпляра класса
+      (assert (not (contains? @doc-hierarchy '~name))
+        (format "ERROR IN def-doc-type METHOD: Сlass name %s is already defined in doc-hierarchy" '~name)
+      )
+      (assert (= (count unique-fields#) (count all-fields#))
+        (format "ERROR IN def-doc-type METHOD: Some field name for class %s is already defined in this class or in one of its parent classes" ~name)
+      )
+      (println inits#)
+      (doseq [init-field# (keys inits#)]
+        (assert (contains? unique-fields# init-field#)
+          (format "ERROR IN def-doc-type METHOD: For class %s init-field %s not defined"  '~name init-field#)
+        )
+      )
+      (dosync
+        (alter
+          doc-hierarchy
+          (fn [h#]
+            (assoc
+              ;; private
+              h# ~name {
+                ::type   '~name
+                ::super  supers#
+                ::fields fields#
+                ::inits   inits#
+              }
+            ))))))
 
 (defn create-doc [type & fields_values]
   "Creates an instance of the class."

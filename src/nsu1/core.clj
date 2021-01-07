@@ -13,6 +13,8 @@
     :cnt1
     :cnt2
   )
+  ; ToDo Validator
+  ;(valid :cnt1 pos?)
   ; Init
   (init :cnt1 1 :cnt2 2)
 )
@@ -22,6 +24,7 @@ doc-hierarchy
 (pprint (macroexpand  `(def-doc-type :DerivedDoc
   (:BaseDoc)
   (:cnt3)
+  ; ()
   (init :cnt1 2 :cnt2 4 :cnt3 6))))
 (println "\n\n")
 
@@ -29,6 +32,7 @@ doc-hierarchy
 (pprint (macroexpand  (def-doc-type :DerivedDoc
   (:BaseDoc)
   (:cnt3)
+  ; ()
   (init :cnt1 2 :cnt2 4 :cnt3 6))))
 (println "\n\n")
 
@@ -44,4 +48,11 @@ doc-hierarchy
 (defn -main []
   (println "-main")
   (println "end -main")
+)
+
+;Инстанцирование документов, вызов «методов»                ; new
+(let [doc (create-doc :DerivedDoc :cnt1 1 :cnt2 2 :cnt3 3)]
+  ;(println (getf doc :cnt1) (getf doc :cnt2))
+  ;(inc-counters doc 2)
+  ;(println (getf doc :cnt1) (getf doc :cnt2))
 )

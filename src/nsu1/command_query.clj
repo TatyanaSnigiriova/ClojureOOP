@@ -17,6 +17,7 @@
           ::super nil
           ::fields {}
           ::init nil
+         ; ToDo :: validators nil
         }))))
 
 (defn init [field value & map]
@@ -32,16 +33,16 @@
 ; чтобы получить весь набор полей и их начальных значений, которые, опять же, могут быть переопределены в наследниках.
 
 ; Return only TypeName, not structure for superClass
-(defn get-super-class-type [class]
-  (get (get @doc-hierarchy class) ::super)
+(defn get-super-class-type [type]
+  (get (get @doc-hierarchy type) ::super)
 )
 
-(defn get-all-fields [сlass]
+(defn get-all-fields [type]
   "Retrieves all fields of the current class and its ancestor classes."
   (let [
-      class-def (get @doc-hierarchy сlass)
+      class-def (get @doc-hierarchy type)
       class-fields (get class-def ::fields)
-      supers (get-super-class-type сlass)
+      supers (get-super-class-type type)
     ]
     (if
       (not (nil? supers))                                   ; Только базовый класс :Document может не иметь родителей
@@ -56,13 +57,13 @@
       ) class-fields
     )))
 
-(defn get-all-inits [сlass]
+(defn get-all-inits [type]
   "Retrieves all default values of the current class and its ancestor classes.
   The successor overrides values set in predecessor."
   (let [
-      class-def (get @doc-hierarchy сlass)
+      class-def (get @doc-hierarchy type)
       class-init (get class-def ::init)
-      supers (get-super-class-type сlass)
+      supers (get-super-class-type type)
     ]
     (if
       (not (nil? supers))
@@ -113,6 +114,7 @@
          (assert (= (count unique-fields#) (count all-fields#))
             (format "The field name for class %s is already defined in one of its parent classes %s %s" ~name unique-fields#  all-fields#)
          )
+         ; ToDo - нужна проверка для init - могут быть перечислены поля, которых нет в all-fields#
          (alter
            doc-hierarchy
            (fn [h#]
@@ -130,3 +132,42 @@
                   )))))))
 
 ; ToDo Создание экземпляра класса
+
+(defn create-doc [type & fields_values]
+  "Creates an instance of the class."
+  {:pre [(contains? @doc-hierarchy type)]}
+  (let [
+      fields_values (if (nil? fields_values) '() fields_values)
+      all_fields (set (get-all-fields type))
+      all_inits (get-all-inits type)
+      fields_values_map (merge all_inits (apply hash-map fields_values))
+      state (ref {})
+    ]
+    ; Нужна проверка на пересечение типов
+    (dosync
+      (doseq [kv fields_values_map]
+        (if (contains? all_fields (first kv))
+          (alter state
+            #(assoc % (first kv) (ref (second kv)))         ;Используя ref - есть возможность упаковать validator вместе со значением
+          )
+          (assert false
+            (format
+              "Constructor error for an instance of an object of type %s
+              - the object does not contain field '%s'." (str type) (first kv)
+            )
+          )
+        )
+      )
+    )
+    ; Таким образом, и сам объект является именяемым, и его поля
+    ; Что позволяет исполнять, например, механизм агрегирования
+
+    ; Сам объект
+    ;;все состояние хранится под одним ref
+    ;;можем использовать стандартный механизм валидации
+    {::type type,
+     ::state state                                          ; ::fields будем использовать для списка всех полей
+     ; Список полей для всех экземпляров одного класса будет одинаковым, поэтому его можно получить в doc-hierarchy
+    }
+  ))
+

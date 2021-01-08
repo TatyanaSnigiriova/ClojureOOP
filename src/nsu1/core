@@ -1,0 +1,16 @@
+;Определение «абстрактного метода» (Определение операции на всю иерархию)
+(def-command inc-counters)
+
+; Определение реализаций методов для операции, которые привязаны к конкретным классам
+; Command query sepparation также хотим реализовать
+; Команды - запись. query - чтение
+
+(def-method inc-counters :BaseDoc [obj amount]
+            (set-value obj :cnt1 (+ amount (get-value obj :cnt1)))             ; set_field
+            )
+
+(def-method inc-counters :DerivedDoc [obj amount]
+            (super amount)
+            (set-value obj :cnt2 (+ amount (get-value obj :cnt2)))
+)
+

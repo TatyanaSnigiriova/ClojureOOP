@@ -1,0 +1,34 @@
+;;собственно, механизм вызова (диспетчерезации)
+(defn perform-effective-command1 [vtable eff-type obj & args]
+  ;;dispatch ищет наиболее специфичный метод
+  ;;возвращает пару [тип метод]
+  (let
+    [
+     [d-type eff-fn] (dispatch vtable eff-type)
+     d-super-type (get-super-class-type d-type)
+     ]
+    ;;определение динамического лексического контекста
+    ; Переопределяет локально значение этой перременной на все, что находится ниже по стеку
+    (binding
+      [super
+       (partial
+         perform-effective-command1
+         vtable d-super-type obj
+         )
+       ]
+      (dosync
+        (apply eff-fn (cons obj args))
+        ))))
+
+
+;;определение метода
+(defmacro def-method1 [command-name type argv & body]
+  `(~command-name [
+                   ~type
+                   (fn ~argv ~@body)                                     ; Лямбда-выражение
+                   ]
+     ))
+
+
+
+
